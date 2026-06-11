@@ -27,7 +27,8 @@
      | `GITHUB_REPO` | `blaragros-ai/Pampero-Dashboard` |
      | `CLAVE_CIFRADO` | la clave de acceso del tablero |
 6. Volver al editor, elegir la función **`probarAhora`** en el desplegable y apretar **Ejecutar**. Google va a pedir autorización para acceder al Gmail y a servicios externos: aceptar (avisa que la app "no está verificada" porque es un script propio: Configuración avanzada → Ir al proyecto). En el "Registro de ejecución" tiene que decir qué archivos subió.
-7. Ir a **Activadores** (relojito) → "Añadir activador":
+7. **Para cargar el historial completo de 2026**: elegir la función **`cargarHistorico`** en el desplegable y ejecutarla una vez. Busca en toda la casilla los mails con reportes desde enero 2026 y los sube todos (puede tardar unos minutos). Solo hace falta hacerlo una vez; las semanas que ya estén subidas se reemplazan sin duplicarse.
+8. Ir a **Activadores** (relojito) → "Añadir activador":
    - Función: `extraerReportesSemanales`
    - Origen: "Basado en tiempo" → "Temporizador semanal" → **Lunes** → **15:00 a 16:00**
    - Guardar.
