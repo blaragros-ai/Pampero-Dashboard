@@ -22,10 +22,20 @@ var PROPS = PropertiesService.getScriptProperties();
 
 // Función principal (la que va en el disparador semanal)
 function extraerReportesSemanales() {
+  procesarMails('has:attachment filename:csv newer_than:10d');
+}
+
+// Ejecutar UNA VEZ a mano para cargar todos los reportes históricos de 2026
+// que estén en la casilla (puede tardar unos minutos si hay muchas semanas).
+function cargarHistorico() {
+  procesarMails('has:attachment filename:csv after:2026/01/01');
+}
+
+function procesarMails(consulta) {
   var clave = PROPS.getProperty('CLAVE_CIFRADO');
   if (!clave) throw new Error('Falta la propiedad CLAVE_CIFRADO');
 
-  var hilos = GmailApp.search('has:attachment filename:csv newer_than:10d');
+  var hilos = GmailApp.search(consulta);
   var subidos = [];
 
   hilos.forEach(function (hilo) {
@@ -53,7 +63,7 @@ function extraerReportesSemanales() {
     actualizarIndice(subidos);
     Logger.log('Listo: ' + subidos.length + ' archivo(s) subido(s) y agregado(s) al índice.');
   } else {
-    Logger.log('No se encontraron reportes CSV en los últimos 10 días.');
+    Logger.log('No se encontraron reportes CSV con la búsqueda: ' + consulta);
   }
 }
 
