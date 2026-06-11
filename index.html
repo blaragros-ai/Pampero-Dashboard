@@ -34,9 +34,9 @@
   #velo{position:fixed; inset:0; background:rgba(30,77,43,.85); color:#fff; display:none; align-items:center; justify-content:center; font-size:26px; font-weight:600; z-index:50; pointer-events:none;}
   body.arrastrando #velo{display:flex;}
 
-  /* selector de semanas */
-  #semanas{display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 18px;}
-  .chip{background:#fff; border:1px solid var(--borde); border-radius:20px; padding:7px 16px; font-size:13.5px; cursor:pointer; color:var(--texto);}
+  /* selector de semanas (deslizable cuando hay muchas) */
+  #semanas{display:flex; gap:8px; flex-wrap:nowrap; overflow-x:auto; margin:4px 0 18px; padding-bottom:6px;}
+  .chip{background:#fff; border:1px solid var(--borde); border-radius:20px; padding:7px 16px; font-size:13.5px; cursor:pointer; color:var(--texto); flex:0 0 auto; white-space:nowrap;}
   .chip.activa{background:var(--verde); color:#fff; border-color:var(--verde); font-weight:600;}
 
   /* KPIs */
@@ -182,6 +182,8 @@ function etiquetaSemana(clave){
   return c(ini) + ' al ' + c(fin) + '/' + fin.getFullYear();
 }
 const DIAS = ['dom','lun','mar','mié','jue','vie','sáb'];
+const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function etiquetaMes(am){ const [a, m] = am.split('-').map(Number); return MESES[m-1] + ' ' + a; }
 function etiquetaDia(iso){ const [a,m,d] = iso.split('-').map(Number); const f = new Date(a,m-1,d); return DIAS[f.getDay()] + ' ' + String(d).padStart(2,'0') + '/' + String(m).padStart(2,'0'); }
 function nombreArt(art){ return art.replace(/^\S+\s+/, ''); }
 function codigoArt(art){ const m = art.match(/^(\S+)\s/); return m ? m[1] : ''; }
@@ -241,9 +243,11 @@ function extraerFilas(matriz){
   return filas;
 }
 
-// Reporte "Margen entre ventas y listas de precios": una fila por día con dos
-// bloques de columnas (LISTA1 PUBLICO y LISTA3 FRANQUICIAS). Las posiciones se
-// detectan desde la fila de encabezados que empieza con "Fecha - Día".
+// Reporte "Margen entre ventas y listas de precios": dos bloques de columnas
+// (LISTA1 PUBLICO y LISTA3 FRANQUICIAS) detectados desde la fila de encabezados
+// que empieza con "Fecha - Día". Soporta tanto el formato resumido (una fila
+// por día) como el abierto por artículo (la fecha solo está en la primera fila
+// del día): en ambos casos se acumula por día.
 function extraerMargenes(matriz){
   const enc = matriz.find(f => (f[0] || '').trim() === 'Fecha - Día');
   if(!enc) return {};
@@ -262,18 +266,30 @@ function extraerMargenes(matriz){
   const iCosto = (ocurr['Monto c/imp'] || [])[fr];
   if([iCant, iLista, iVenta, iCosto].some(i => i === undefined)) return {};
   const dias = {};
+  let fecha = null;
   for(const c of matriz){
     const c0 = (c[0] || '').trim();
     if(c0 === 'Total General') break;
-    if(!RE_FECHA.test(c0)) continue;
+    if(RE_FECHA.test(c0)) fecha = claveISO(aFecha(c0));
+    if(!fecha) continue;
     const q = numAR(c[iCant]), lista = numAR(c[iLista]), venta = numAR(c[iVenta]), costo = numAR(c[iCosto]);
     if(q === null || lista === null || venta === null || costo === null) continue;
-    dias[claveISO(aFecha(c0))] = { q, lista, venta, costo };
+    const d = dias[fecha] ||= { q: 0, lista: 0, venta: 0, costo: 0 };
+    d.q += q; d.lista += lista; d.venta += venta; d.costo += costo;
   }
   return dias;
 }
 
 /* ================= ingesta de archivos ================= */
+// Reemplazo por día: si un archivo trae días de una semana que ya existe,
+// pisa solo esos días y conserva los demás (importante cuando dos archivos
+// distintos cubren tramos de la misma semana, p. ej. fin de año).
+function fusionarSemana(claveSem, nuevas){
+  const diasNuevos = new Set(nuevas.map(r => r.d));
+  const previas = ((datos.semanas[claveSem] || {}).filas || []).filter(r => !diasNuevos.has(r.d));
+  datos.semanas[claveSem] = { filas: [...previas, ...nuevas] };
+}
+
 // Clasifica un CSV (texto plano) como reporte de margen o de ventas y lo parsea.
 function procesarTexto(texto){
   const matriz = parsearCSV(texto);
@@ -304,7 +320,7 @@ async function ingerirArchivos(lista){
     const porSemana = {};
     for(const r of filas) (porSemana[lunesDe(r.d.split('-').reverse().join('/'))] ||= []).push(r);
     for(const [clave, fs] of Object.entries(porSemana)){
-      datos.semanas[clave] = { filas: fs };
+      fusionarSemana(clave, fs);
       cargadas.push(clave);
     }
   }
@@ -365,7 +381,7 @@ function aplicarTexto(texto){   // vuelca un CSV ya descifrado sobre `datos`, si
   if(res.tipo === 'margen'){ Object.assign(datos.margenes, res.dias); return; }
   const porSemana = {};
   for(const r of res.filas) (porSemana[lunesDe(r.d.split('-').reverse().join('/'))] ||= []).push(r);
-  for(const [clave, fs] of Object.entries(porSemana)) datos.semanas[clave] = { filas: fs };
+  for(const [clave, fs] of Object.entries(porSemana)) fusionarSemana(clave, fs);
 }
 
 async function cargarDesdeNube(){
@@ -547,21 +563,47 @@ function render(){
     '<div class="kpi neg"><div class="et">Cambios y devoluciones</div><div class="valor">' + fmt$(Math.abs(negM)) + '</div><div class="sub">' + fmtN(Math.abs(negQ)) + ' unidades devueltas</div></div>' +
     '</div>';
 
-  /* --- ventas diarias --- */
+  /* --- ventas diarias (o mensuales en la vista "Todas") --- */
   const porDia = [...agrupar(fs, r => r.d).entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
-  h += '<section class="panel"><h3>Ventas diarias</h3>' +
-       '<div class="nota">' + (sel === 'all' ? 'Todos los días cargados' : 'Semana del ' + etiquetaSemana(sel)) + ' · pasá el mouse por las barras para ver el detalle</div>' +
-       graficoBarras(porDia.map(([d, g]) => ({ etiqueta: etiquetaDia(d), valor: g.m, sub: fmtN(g.q) + ' u.' })),
-                     { formato: v => fmt$(v).replace('$ ', '$'), anchoBarra: sel === 'all' && porDia.length > 14 ? 42 : 64 }) +
-       '</section>';
+  const mensual = sel === 'all' && porDia.length > 31;
+  if(mensual){
+    const porMes = [...agrupar(fs, r => r.d.slice(0, 7)).entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+    h += '<section class="panel"><h3>Ventas por mes</h3>' +
+         '<div class="nota">Todo el período cargado, agrupado por mes · elegí una semana arriba para ver el día a día</div>' +
+         graficoBarras(porMes.map(([m, g]) => ({ etiqueta: etiquetaMes(m), valor: g.m, sub: fmtN(g.q) + ' u.' })),
+                       { formato: v => fmt$(v).replace('$ ', '$') }) +
+         '</section>';
+  } else {
+    h += '<section class="panel"><h3>Ventas diarias</h3>' +
+         '<div class="nota">' + (sel === 'all' ? 'Todos los días cargados' : 'Semana del ' + etiquetaSemana(sel)) + ' · pasá el mouse por las barras para ver el detalle</div>' +
+         graficoBarras(porDia.map(([d, g]) => ({ etiqueta: etiquetaDia(d), valor: g.m, sub: fmtN(g.q) + ' u.' })),
+                       { formato: v => fmt$(v).replace('$ ', '$'), anchoBarra: sel === 'all' && porDia.length > 14 ? 42 : 64 }) +
+         '</section>';
+  }
 
-  /* --- margen bruto diario --- */
+  /* --- margen bruto diario (o mensual en la vista "Todas") --- */
   if(mg.length){
-    h += '<section class="panel"><h3>Margen bruto diario</h3>' +
-         '<div class="nota">Venta real menos costo de compra (lista franquicias, c/imp.) · el porcentaje es sobre la venta del día</div>' +
-         graficoBarras(mg.map(([d, x]) => ({ etiqueta: etiquetaDia(d), valor: x.venta - x.costo,
-                                             sub: x.venta ? pct1((x.venta - x.costo) / x.venta * 100) : '' })),
-                       { formato: v => fmt$(v).replace('$ ', '$'), anchoBarra: sel === 'all' && mg.length > 14 ? 42 : 64, color: '#4a7c59' }) +
+    const mensualMg = sel === 'all' && mg.length > 31;
+    let serieMg;
+    if(mensualMg){
+      const meses = new Map();
+      for(const [d, x] of mg){
+        const k = d.slice(0, 7);
+        const a = meses.get(k) || { venta: 0, costo: 0 };
+        a.venta += x.venta; a.costo += x.costo;
+        meses.set(k, a);
+      }
+      serieMg = [...meses.entries()].sort((a, b) => a[0] < b[0] ? -1 : 1)
+        .map(([k, a]) => ({ etiqueta: etiquetaMes(k), valor: a.venta - a.costo,
+                            sub: a.venta ? pct1((a.venta - a.costo) / a.venta * 100) : '' }));
+    } else {
+      serieMg = mg.map(([d, x]) => ({ etiqueta: etiquetaDia(d), valor: x.venta - x.costo,
+                                      sub: x.venta ? pct1((x.venta - x.costo) / x.venta * 100) : '' }));
+    }
+    h += '<section class="panel"><h3>' + (mensualMg ? 'Margen bruto por mes' : 'Margen bruto diario') + '</h3>' +
+         '<div class="nota">Venta real menos costo de compra (lista franquicias, c/imp.) · el porcentaje es sobre la venta</div>' +
+         graficoBarras(serieMg, { formato: v => fmt$(v).replace('$ ', '$'),
+                                  anchoBarra: !mensualMg && sel === 'all' && mg.length > 14 ? 42 : 64, color: '#4a7c59' }) +
          '</section>';
   }
 
@@ -588,7 +630,8 @@ function render(){
         const g = datos.semanas[k].filas;
         return { etiqueta: et, valor: metrica === 'm' ? suma(g,'m') : suma(g,'q'),
                  sub: metrica === 'm' ? fmtN(suma(g,'q')) + ' u.' : fmt$(suma(g,'m')) };
-      }), { formato: metrica === 'q' ? fmtN : (v => fmt$(v).replace('$ ', '$')), color: metrica === 'g' ? '#4a7c59' : '#1e4d2b' }) +
+      }), { formato: metrica === 'q' ? fmtN : (v => fmt$(v).replace('$ ', '$')), color: metrica === 'g' ? '#4a7c59' : '#1e4d2b',
+            anchoBarra: claves.length > 14 ? 46 : 64 }) +
       '</section>';
 
   /* --- por proveedor (drill-down) --- */
@@ -667,6 +710,11 @@ function render(){
   }
 
   cont.innerHTML = h;
+
+  /* mostrar lo más reciente: chips y gráficos deslizados a la derecha */
+  const sem = document.getElementById('semanas');
+  if(sem) sem.scrollLeft = sem.scrollWidth;
+  cont.querySelectorAll('.desliza').forEach(d => { d.scrollLeft = d.scrollWidth; });
 
   /* expandir / contraer filas */
   cont.querySelectorAll('tr[data-id]').forEach(tr => {
