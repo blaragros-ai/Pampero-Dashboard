@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablero de Ventas — Pampero Orán</title>
+<style>
+  :root{
+    --verde:#1e4d2b; --verde2:#2e7d32; --verde-claro:#e8f0ea;
+    --crema:#faf7f1; --carta:#ffffff; --texto:#26322b; --gris:#7a857e;
+    --rojo:#b3261e; --rojo-claro:#fdecea; --borde:#e3e0d8;
+    --sombra:0 1px 3px rgba(30,50,35,.08), 0 4px 14px rgba(30,50,35,.06);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:"Segoe UI",system-ui,-apple-system,sans-serif; background:var(--crema); color:var(--texto); font-size:15px;}
+
+  header{background:var(--verde); color:#fff; padding:14px 28px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;}
+  header h1{font-size:20px; font-weight:600; letter-spacing:.3px;}
+  header h1 small{display:block; font-size:12px; font-weight:400; opacity:.75; letter-spacing:.5px;}
+  header .botones{margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;}
+  button{font-family:inherit; font-size:13.5px; border:none; border-radius:8px; padding:8px 14px; cursor:pointer; transition:filter .15s;}
+  button:hover{filter:brightness(1.08);}
+  .btn-claro{background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.35);}
+  .btn-primario{background:#fff; color:var(--verde); font-weight:600;}
+  .btn-suave{background:var(--verde-claro); color:var(--verde);}
+  .btn-peligro{background:var(--rojo-claro); color:var(--rojo);}
+
+  main{max-width:1180px; margin:0 auto; padding:22px 28px 60px;}
+
+  /* zona de carga / estado vacío */
+  #zonaVacia{border:2px dashed #b9c4bb; border-radius:14px; background:#fff; padding:60px 30px; text-align:center; margin-top:30px;}
+  #zonaVacia h2{color:var(--verde); margin-bottom:10px; font-size:22px;}
+  #zonaVacia p{color:var(--gris); max-width:520px; margin:6px auto; line-height:1.5;}
+  #velo{position:fixed; inset:0; background:rgba(30,77,43,.85); color:#fff; display:none; align-items:center; justify-content:center; font-size:26px; font-weight:600; z-index:50; pointer-events:none;}
+  body.arrastrando #velo{display:flex;}
+
+  /* selector de semanas */
+  #semanas{display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 18px;}
+  .chip{background:#fff; border:1px solid var(--borde); border-radius:20px; padding:7px 16px; font-size:13.5px; cursor:pointer; color:var(--texto);}
+  .chip.activa{background:var(--verde); color:#fff; border-color:var(--verde); font-weight:600;}
+
+  /* KPIs */
+  #kpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:14px; margin-bottom:22px;}
+  .kpi{background:var(--carta); border-radius:12px; padding:16px 18px; box-shadow:var(--sombra);}
+  .kpi .et{font-size:12.5px; color:var(--gris); text-transform:uppercase; letter-spacing:.6px;}
+  .kpi .valor{font-size:26px; font-weight:700; margin-top:4px; color:var(--verde);}
+  .kpi .sub{font-size:12.5px; color:var(--gris); margin-top:3px;}
+  .kpi.neg .valor{color:var(--rojo);}
+  .delta-pos{color:var(--verde2); font-weight:600;}
+  .delta-neg{color:var(--rojo); font-weight:600;}
+
+  section.panel{background:var(--carta); border-radius:12px; padding:20px 22px; box-shadow:var(--sombra); margin-bottom:22px;}
+  section.panel h3{font-size:16px; color:var(--verde); margin-bottom:4px;}
+  section.panel .nota{font-size:12.5px; color:var(--gris); margin-bottom:14px;}
+  .fila-titulo{display:flex; align-items:center; gap:12px; flex-wrap:wrap;}
+  .fila-titulo .alternar{margin-left:auto; display:flex; gap:6px;}
+  .alternar button{background:#f0efe9; color:var(--texto); padding:6px 12px; font-size:12.5px;}
+  .alternar button.activa{background:var(--verde); color:#fff;}
+
+  .desliza{overflow-x:auto;}
+  svg text{font-family:inherit;}
+
+  /* tablas drill-down */
+  table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  th{text-align:left; color:var(--gris); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.5px; padding:8px 10px; border-bottom:2px solid var(--borde);}
+  th.num, td.num{text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums;}
+  td{padding:8px 10px; border-bottom:1px solid #f0eee7;}
+  tr.fprov, tr.fart{cursor:pointer;}
+  tr.fprov:hover, tr.fart:hover{background:#f6f8f5;}
+  tr.fprov td:first-child{font-weight:600;}
+  tr.fart td:first-child{padding-left:30px;}
+  tr.fdet td{background:#fbfbf7; color:#555; font-size:13px;}
+  tr.fdet td:first-child{padding-left:52px;}
+  .flecha{display:inline-block; width:14px; color:var(--verde2); transition:transform .15s;}
+  .abierta .flecha{transform:rotate(90deg);}
+  .oculta{display:none;}
+  .barra{background:var(--verde-claro); border-radius:4px; height:8px; min-width:2px; display:inline-block; vertical-align:middle;}
+  .barra i{display:block; height:100%; background:var(--verde2); border-radius:4px;}
+  .neg{color:var(--rojo);}
+
+  input[type=search]{font-family:inherit; font-size:13.5px; border:1px solid var(--borde); border-radius:8px; padding:8px 12px; width:280px; max-width:100%;}
+  input[type=search]:focus{outline:2px solid var(--verde2); border-color:transparent;}
+
+  /* aviso flotante */
+  #aviso{position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--verde); color:#fff; padding:12px 22px; border-radius:10px; box-shadow:0 6px 20px rgba(0,0,0,.25); font-size:14px; display:none; z-index:60; max-width:90vw;}
+  #aviso.error{background:var(--rojo);}
+
+  /* modal ayuda */
+  #ayuda{border:none; border-radius:14px; padding:0; max-width:560px; width:92vw; box-shadow:0 10px 40px rgba(0,0,0,.3);}
+  #ayuda::backdrop{background:rgba(20,30,22,.5);}
+  #ayuda .cuerpo{padding:26px 30px;}
+  #ayuda h2{color:var(--verde); margin-bottom:14px;}
+  #ayuda ol{padding-left:20px; line-height:1.7;}
+  #ayuda li{margin-bottom:8px;}
+  #ayuda p{margin-top:14px; color:var(--gris); font-size:13.5px; line-height:1.5;}
+
+  footer{max-width:1180px; margin:0 auto; padding:0 28px 40px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;}
+  footer .nota{font-size:12.5px; color:var(--gris);}
+
+  /* puerta de acceso (solo en modo nube) */
+  #puerta{position:fixed; inset:0; background:var(--verde); display:flex; align-items:center; justify-content:center; z-index:100;}
+  #puerta .tarjeta{background:#fff; border-radius:14px; padding:34px 38px; width:360px; max-width:92vw; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,.35);}
+  #puerta h2{color:var(--verde); font-size:18px; margin-bottom:6px;}
+  #puerta p{color:var(--gris); font-size:13.5px; margin-bottom:16px;}
+  #puerta input{width:100%; font-size:16px; padding:10px 12px; border:1px solid var(--borde); border-radius:8px; margin-bottom:12px; text-align:center; box-sizing:border-box;}
+  #puerta input:focus{outline:2px solid var(--verde2); border-color:transparent;}
+  #puerta .err{color:var(--rojo); font-size:13px; margin-bottom:10px;}
+  #puerta button{width:100%; background:var(--verde); color:#fff; font-size:15px; padding:10px;}
+</style>
+</head>
+<body>
+
+<div id="velo">Soltá el archivo CSV para cargarlo</div>
+
+<header>
+  <h1>PAMPERO · Tablero de Ventas<small>Franquicia San Ramón de la Nueva Orán</small></h1>
+  <div class="botones">
+    <button class="btn-primario" onclick="document.getElementById('archivo').click()">⬆ Cargar reporte semanal (CSV)</button>
+    <button class="btn-claro" onclick="exportarRespaldo()">Exportar respaldo</button>
+    <button class="btn-claro" onclick="document.getElementById('archivoRespaldo').click()">Importar respaldo</button>
+    <button class="btn-claro" onclick="document.getElementById('ayuda').showModal()">Ayuda</button>
+  </div>
+</header>
+
+<input type="file" id="archivo" accept=".csv,.CSV" multiple hidden>
+<input type="file" id="archivoRespaldo" accept=".json" hidden>
+
+<main id="contenido"></main>
+
+<footer id="pie" style="display:none">
+  <button class="btn-peligro" onclick="borrarTodo()">Borrar todos los datos</button>
+  <button class="btn-suave" id="btnSalir" style="display:none" onclick="cerrarSesion()">Olvidar clave en esta computadora</button>
+  <span class="nota" id="notaPie">Los datos quedan guardados únicamente en este navegador, en esta computadora. Usá "Exportar respaldo" para hacer una copia o pasarle la historia a otra persona.</span>
+</footer>
+
+<div id="aviso"></div>
+
+<dialog id="ayuda">
+  <div class="cuerpo">
+    <h2>¿Cómo se usa?</h2>
+    <ol>
+      <li>Todos los lunes te llegan por Gmail dos CSV: el <b>Reporte Ventas Semanal</b> y el reporte de <b>Margen entre ventas y listas de precios</b>. Descargalos (el clip del adjunto → Descargar).</li>
+      <li>Abrí este tablero y <b>arrastrá los archivos</b> adentro de la ventana (pueden ir los dos juntos; el tablero reconoce solo cuál es cuál). El de ventas alimenta los gráficos y el detalle; el de margen agrega el margen bruto y la comparación contra el precio de lista.</li>
+      <li>La semana se suma a la historia y los gráficos se actualizan solos. Si cargás dos veces la misma semana, se reemplaza (no se duplica).</li>
+      <li>Podés cargar <b>varios archivos juntos</b> para ponerte al día con semanas viejas.</li>
+      <li>Hacé clic en un <b>proveedor</b> o en un <b>artículo</b> de las tablas para abrir el detalle (artículos, colores y talles).</li>
+    </ol>
+    <p>La historia queda guardada en el navegador de esta computadora. Cada gerente carga el CSV en su propia máquina. Con "Exportar respaldo" se genera un archivito que otro gerente puede importar para tener la misma historia sin cargar semana por semana.</p>
+    <div style="text-align:right; margin-top:18px">
+      <button class="btn-suave" onclick="document.getElementById('ayuda').close()">Entendido</button>
+    </div>
+  </div>
+</dialog>
+
+<script src="crypto-js.min.js"></script>
+<script>
+'use strict';
+/* ================= almacenamiento ================= */
+const CLAVE = 'pampero_tablero_v1';
+let datos = { semanas: {}, margenes: {} };
+// semanas:  { '2026-06-01': { filas:[{d,prov,art,color,talle,q,m}] } }   ← Reporte Ventas Semanal
+// margenes: { '2026-06-01': {q, lista, venta, costo} } por día           ← Reporte de Margen (precio público vs. franquicia)
+let sel = 'all';                       // semana seleccionada ('all' = todas)
+let metrica = 'm';                     // comparativo semanal: 'm' monto | 'q' unidades | 'g' margen
+let busqueda = '';
+
+function cargar(){ try{ const t = localStorage.getItem(CLAVE); if(t) datos = JSON.parse(t); }catch(e){} datos.semanas ||= {}; datos.margenes ||= {}; }
+function guardar(){ localStorage.setItem(CLAVE, JSON.stringify(datos)); }
+
+/* ================= utilidades ================= */
+const fmt$ = v => (v < 0 ? '−$ ' : '$ ') + Math.abs(Math.round(v)).toLocaleString('es-AR');
+const fmtN = v => v.toLocaleString('es-AR');
+const esc  = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function aFecha(ddmmaaaa){ const [d,m,a] = ddmmaaaa.split('/').map(Number); return new Date(a, m-1, d); }
+function claveISO(f){ return f.getFullYear() + '-' + String(f.getMonth()+1).padStart(2,'0') + '-' + String(f.getDate()).padStart(2,'0'); }
+function lunesDe(ddmmaaaa){ const f = aFecha(ddmmaaaa); f.setDate(f.getDate() - (f.getDay()+6)%7); return claveISO(f); }
+function etiquetaSemana(clave){
+  const [a,m,d] = clave.split('-').map(Number);
+  const ini = new Date(a, m-1, d), fin = new Date(a, m-1, d+6);
+  const c = f => String(f.getDate()).padStart(2,'0') + '/' + String(f.getMonth()+1).padStart(2,'0');
+  return c(ini) + ' al ' + c(fin) + '/' + fin.getFullYear();
+}
+const DIAS = ['dom','lun','mar','mié','jue','vie','sáb'];
+function etiquetaDia(iso){ const [a,m,d] = iso.split('-').map(Number); const f = new Date(a,m-1,d); return DIAS[f.getDay()] + ' ' + String(d).padStart(2,'0') + '/' + String(m).padStart(2,'0'); }
+function nombreArt(art){ return art.replace(/^\S+\s+/, ''); }
+function codigoArt(art){ const m = art.match(/^(\S+)\s/); return m ? m[1] : ''; }
+function categoriaDe(art){
+  const n = nombreArt(art).normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase();
+  return (n.split(/\s+/)[0] || 'OTROS');
+}
+
+function avisar(msg, error){
+  const a = document.getElementById('aviso');
+  a.textContent = msg; a.className = error ? 'error' : ''; a.style.display = 'block';
+  clearTimeout(avisar._t); avisar._t = setTimeout(() => a.style.display = 'none', 5000);
+}
+
+/* ================= parser del CSV ================= */
+function parsearCSV(texto){           // → matriz de celdas, respetando comillas
+  const filas = [[]]; let campo = '', enComillas = false;
+  for(let i = 0; i < texto.length; i++){
+    const c = texto[i];
+    if(enComillas){
+      if(c === '"'){ if(texto[i+1] === '"'){ campo += '"'; i++; } else enComillas = false; }
+      else campo += c;
+    } else if(c === '"') enComillas = true;
+    else if(c === ','){ filas[filas.length-1].push(campo); campo = ''; }
+    else if(c === '\n'){ filas[filas.length-1].push(campo); campo = ''; filas.push([]); }
+    else if(c !== '\r') campo += c;
+  }
+  filas[filas.length-1].push(campo);
+  return filas;
+}
+function numAR(s){                    // "108.273,97" → 108273.97
+  s = (s || '').trim(); if(!s) return null;
+  const v = parseFloat(s.replace(/\./g,'').replace(',','.'));
+  return isNaN(v) ? null : v;
+}
+const RE_FECHA = /^\d{2}\/\d{2}\/\d{4}$/;
+
+// El reporte es un export "pivot": fecha, proveedor, artículo y color solo
+// aparecen en la primera fila de su grupo y valen para las filas siguientes.
+function extraerFilas(matriz){
+  const filas = [];
+  let fecha = null, prov = null, art = null, color = null;
+  for(const c of matriz){
+    const c0 = (c[0] || '').trim();
+    if(c0 === 'Total General') break;
+    if(RE_FECHA.test(c0)){ fecha = c0; prov = art = color = null; }
+    if(!fecha) continue;                               // encabezados
+    const p = (c[2] || '').trim();  if(p){ prov = p; art = color = null; }
+    const a = (c[6] || '').trim();  if(a){ art = a; color = null; }
+    const col = (c[9] || '').trim(); if(col) color = col;
+    const talle = (c[10] || '').trim().split(/\s+/)[0] || '';
+    const q = numAR(c[11]), m = numAR(c[12]);
+    if(q === null || m === null || !art) continue;
+    const f = aFecha(fecha);
+    filas.push({ d: claveISO(f), prov: prov || 'SIN PROVEEDOR', art, color: color || '—', talle: talle || '—', q, m });
+  }
+  return filas;
+}
+
+// Reporte "Margen entre ventas y listas de precios": una fila por día con dos
+// bloques de columnas (LISTA1 PUBLICO y LISTA3 FRANQUICIAS). Las posiciones se
+// detectan desde la fila de encabezados que empieza con "Fecha - Día".
+function extraerMargenes(matriz){
+  const enc = matriz.find(f => (f[0] || '').trim() === 'Fecha - Día');
+  if(!enc) return {};
+  const ocurr = {};
+  enc.forEach((cel, i) => { const t = cel.trim(); if(t) (ocurr[t] ||= []).push(i); });
+  // orden de los bloques según la fila que nombra las listas
+  const fListas = matriz.find(f => f.some(c => c.includes('PUBLICO')) && f.some(c => c.includes('FRANQUICIAS')));
+  let pub = 0, fr = 1;
+  if(fListas){
+    const iPub = fListas.findIndex(c => c.includes('PUBLICO')), iFr = fListas.findIndex(c => c.includes('FRANQUICIAS'));
+    if(iPub > iFr){ pub = 1; fr = 0; }
+  }
+  const iCant  = (ocurr['Cantidad'] || [])[pub];
+  const iLista = (ocurr['Monto c/imp'] || [])[pub];
+  const iVenta = (ocurr['Monto Neto Vtas c/imp'] || [])[fr];
+  const iCosto = (ocurr['Monto c/imp'] || [])[fr];
+  if([iCant, iLista, iVenta, iCosto].some(i => i === undefined)) return {};
+  const dias = {};
+  for(const c of matriz){
+    const c0 = (c[0] || '').trim();
+    if(c0 === 'Total General') break;
+    if(!RE_FECHA.test(c0)) continue;
+    const q = numAR(c[iCant]), lista = numAR(c[iLista]), venta = numAR(c[iVenta]), costo = numAR(c[iCosto]);
+    if(q === null || lista === null || venta === null || costo === null) continue;
+    dias[claveISO(aFecha(c0))] = { q, lista, venta, costo };
+  }
+  return dias;
+}
+
+/* ================= ingesta de archivos ================= */
+// Clasifica un CSV (texto plano) como reporte de margen o de ventas y lo parsea.
+function procesarTexto(texto){
+  const matriz = parsearCSV(texto);
+  if(matriz.some(fila => fila.some(c => c.includes('Margen Vtas'))))
+    return { tipo: 'margen', dias: extraerMargenes(matriz) };
+  return { tipo: 'ventas', filas: extraerFilas(matriz) };
+}
+
+async function ingerirArchivos(lista){
+  const csvs = [...lista].filter(f => /\.csv$/i.test(f.name));
+  if(!csvs.length){ avisar('Ningún archivo CSV reconocido.', true); return; }
+  const cargadas = [], semanasMargen = new Set();
+  for(const f of csvs){
+    const buf = await f.arrayBuffer();
+    let texto = new TextDecoder('utf-8').decode(buf);
+    if(texto.includes('�')) texto = new TextDecoder('windows-1252').decode(buf);
+    const res = procesarTexto(texto);
+
+    if(res.tipo === 'margen'){
+      if(!Object.keys(res.dias).length){ avisar('No pude leer los datos de margen de "' + f.name + '".', true); continue; }
+      Object.assign(datos.margenes, res.dias);
+      for(const d of Object.keys(res.dias)) semanasMargen.add(lunesDe(d.split('-').reverse().join('/')));
+      continue;
+    }
+
+    const filas = res.filas;                                               // reporte de ventas
+    if(!filas.length){ avisar('"' + f.name + '" no parece ser un reporte de ventas ni de margen.', true); continue; }
+    const porSemana = {};
+    for(const r of filas) (porSemana[lunesDe(r.d.split('-').reverse().join('/'))] ||= []).push(r);
+    for(const [clave, fs] of Object.entries(porSemana)){
+      datos.semanas[clave] = { filas: fs };
+      cargadas.push(clave);
+    }
+  }
+  if(cargadas.length || semanasMargen.size){
+    guardar();
+    const partes = [];
+    if(cargadas.length){
+      sel = cargadas.sort().at(-1);
+      const fs = datos.semanas[sel].filas;
+      partes.push('Ventas de la semana del ' + etiquetaSemana(sel) + ': ' + fmtN(suma(fs,'q')) + ' unidades, ' + fmt$(suma(fs,'m')));
+    }
+    if(semanasMargen.size){
+      const ks = [...semanasMargen].sort();
+      partes.push('Margen cargado para la semana del ' + etiquetaSemana(ks.at(-1)) + (ks.length > 1 ? ' (y ' + (ks.length - 1) + ' más)' : ''));
+      if(!cargadas.length && datos.semanas[ks.at(-1)]) sel = ks.at(-1);
+    }
+    avisar(partes.join(' · ') + '.');
+    render();
+  }
+}
+document.getElementById('archivo').addEventListener('change', e => { ingerirArchivos(e.target.files); e.target.value = ''; });
+let contadorArrastre = 0;
+window.addEventListener('dragenter', e => { e.preventDefault(); contadorArrastre++; document.body.classList.add('arrastrando'); });
+window.addEventListener('dragleave', e => { e.preventDefault(); if(--contadorArrastre <= 0){ contadorArrastre = 0; document.body.classList.remove('arrastrando'); } });
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => { e.preventDefault(); contadorArrastre = 0; document.body.classList.remove('arrastrando'); ingerirArchivos(e.dataTransfer.files); });
+
+/* ================= modo nube (GitHub Pages) ================= */
+// Si junto al tablero existe data/index.json, los datos viven cifrados en el
+// repositorio: se pide la clave, se descargan y se descifran en el navegador.
+// Abierto como archivo local (sin data/), todo sigue funcionando como siempre.
+const CLAVE_SESION = 'pampero_clave_v1';
+let modoNube = false;
+
+function descifrar(enc, clave){
+  if(!clave) return '';
+  try{ return CryptoJS.AES.decrypt(enc, clave).toString(CryptoJS.enc.Utf8); }catch(_){ return ''; }
+}
+function pedirClave(conError){
+  return new Promise(res => {
+    let p = document.getElementById('puerta');
+    if(!p){ p = document.createElement('div'); p.id = 'puerta'; document.body.appendChild(p); }
+    p.innerHTML = '<div class="tarjeta"><h2>PAMPERO · Tablero de Ventas</h2>' +
+      '<p>Ingresá la clave de acceso para ver los datos</p>' +
+      '<input type="password" id="claveInp" autocomplete="current-password">' +
+      (conError ? '<div class="err">Clave incorrecta, probá de nuevo.</div>' : '') +
+      '<button id="claveBtn">Entrar</button></div>';
+    const fin = () => res(document.getElementById('claveInp').value);
+    document.getElementById('claveBtn').addEventListener('click', fin);
+    document.getElementById('claveInp').addEventListener('keydown', e => { if(e.key === 'Enter') fin(); });
+    document.getElementById('claveInp').focus();
+  });
+}
+function cerrarSesion(){ localStorage.removeItem(CLAVE_SESION); location.reload(); }
+
+function aplicarTexto(texto){   // vuelca un CSV ya descifrado sobre `datos`, sin persistir en localStorage
+  const res = procesarTexto(texto);
+  if(res.tipo === 'margen'){ Object.assign(datos.margenes, res.dias); return; }
+  const porSemana = {};
+  for(const r of res.filas) (porSemana[lunesDe(r.d.split('-').reverse().join('/'))] ||= []).push(r);
+  for(const [clave, fs] of Object.entries(porSemana)) datos.semanas[clave] = { filas: fs };
+}
+
+async function cargarDesdeNube(){
+  let idx;
+  try{
+    const r = await fetch('data/index.json', { cache: 'no-store' });
+    if(!r.ok) return;
+    idx = await r.json();
+  }catch(_){ return; }                                  // sin data/ → modo local de siempre
+  if(typeof CryptoJS === 'undefined'){ avisar('Falta el archivo crypto-js.min.js junto al tablero.', true); return; }
+  modoNube = true;
+
+  let clave = localStorage.getItem(CLAVE_SESION) || '', conError = false;
+  while(descifrar(idx.comprobacion, clave) !== 'PAMPERO_OK'){
+    clave = await pedirClave(conError); conError = true;
+  }
+  localStorage.setItem(CLAVE_SESION, clave);
+  const p = document.getElementById('puerta'); if(p) p.remove();
+
+  const textos = await Promise.all((idx.archivos || []).map(a =>
+    fetch('data/' + a, { cache: 'no-store' }).then(r => r.ok ? r.text() : null).catch(() => null)));
+  let fallas = 0;
+  for(const enc of textos){
+    if(enc === null){ fallas++; continue; }
+    const txt = descifrar(enc.trim(), clave);
+    if(txt) aplicarTexto(txt); else fallas++;
+  }
+  const ks = Object.keys(datos.semanas).sort();
+  if(ks.length) sel = ks.at(-1);
+  document.getElementById('btnSalir').style.display = '';
+  document.getElementById('notaPie').textContent = 'Los datos se actualizan solos desde el repositorio todos los lunes a la tarde. Si cargás un CSV a mano acá, se ve solo en esta computadora.';
+  render();
+  if(fallas) avisar(fallas + ' archivo(s) de datos no se pudieron leer del repositorio.', true);
+}
+
+/* ================= respaldo ================= */
+function exportarRespaldo(){
+  if(!Object.keys(datos.semanas).length){ avisar('Todavía no hay datos para exportar.', true); return; }
+  const hoy = new Date(), n = 'pampero-respaldo-' + claveISO(hoy) + '.json';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(datos)], { type:'application/json' }));
+  a.download = n; a.click(); URL.revokeObjectURL(a.href);
+  avisar('Respaldo exportado: ' + n);
+}
+document.getElementById('archivoRespaldo').addEventListener('change', async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if(!f) return;
+  try{
+    const j = JSON.parse(await f.text());
+    if(!j.semanas) throw 0;
+    Object.assign(datos.semanas, j.semanas);
+    Object.assign(datos.margenes, j.margenes || {});
+    guardar(); sel = Object.keys(datos.semanas).sort().at(-1);
+    avisar('Respaldo importado: ' + Object.keys(j.semanas).length + ' semana(s).');
+    render();
+  }catch(_){ avisar('El archivo no es un respaldo válido del tablero.', true); }
+});
+function borrarTodo(){
+  if(!confirm('¿Borrar TODA la historia de ventas guardada en esta computadora?\n(Conviene exportar un respaldo antes.)')) return;
+  datos = { semanas: {}, margenes: {} }; guardar(); sel = 'all'; metrica = 'm'; render();
+}
+
+/* ================= agregaciones ================= */
+const suma = (fs, k) => fs.reduce((t, r) => t + r[k], 0);
+function filasSeleccion(){
+  if(sel === 'all') return Object.values(datos.semanas).flatMap(s => s.filas);
+  return (datos.semanas[sel] || { filas: [] }).filas;
+}
+function agrupar(fs, fnClave){
+  const m = new Map();
+  for(const r of fs){
+    const k = fnClave(r);
+    const g = m.get(k) || { q: 0, m: 0, filas: [] };
+    g.q += r.q; g.m += r.m; g.filas.push(r);
+    m.set(k, g);
+  }
+  return m;
+}
+const ordenarPorMonto = mapa => [...mapa.entries()].sort((a, b) => b[1].m - a[1].m);
+
+/* --- margen (precio público vs. costo franquicia) --- */
+function rangoSemana(clave){
+  const [a, m, d] = clave.split('-').map(Number);
+  return [claveISO(new Date(a, m-1, d)), claveISO(new Date(a, m-1, d+6))];
+}
+function margenesEntre(ini, fin){
+  return Object.entries(datos.margenes).filter(([d]) => d >= ini && d <= fin).sort();
+}
+function margenSeleccion(){
+  if(sel === 'all') return Object.entries(datos.margenes).sort();
+  return margenesEntre(...rangoSemana(sel));
+}
+const pct1 = v => v.toFixed(1).replace('.', ',') + '%';
+
+/* ================= gráficos SVG ================= */
+function graficoBarras(items, opc){
+  // items: [{etiqueta, valor, sub}]  opc: {alto, formato, color}
+  const alto = opc.alto || 250, anchoBarra = opc.anchoBarra || 64, paso = anchoBarra + 26;
+  const ancho = Math.max(items.length * paso + 30, 320);
+  const max = Math.max(...items.map(i => Math.abs(i.valor)), 1);
+  const zonaY = alto - 58;
+  let s = '<svg width="' + ancho + '" height="' + alto + '" role="img">';
+  items.forEach((it, i) => {
+    const h = Math.max(Math.round(Math.abs(it.valor) / max * (zonaY - 26)), 2);
+    const x = 20 + i * paso, y = zonaY - h;
+    s += '<rect x="' + x + '" y="' + y + '" width="' + anchoBarra + '" height="' + h + '" rx="6" fill="' + (opc.color || '#2e7d32') + '">' +
+         '<title>' + esc(it.etiqueta) + ': ' + esc(opc.formato(it.valor)) + (it.sub ? ' · ' + esc(it.sub) : '') + '</title></rect>';
+    s += '<text x="' + (x + anchoBarra/2) + '" y="' + (y - 8) + '" text-anchor="middle" font-size="12" font-weight="600" fill="#26322b">' + esc(opc.formato(it.valor)) + '</text>';
+    s += '<text x="' + (x + anchoBarra/2) + '" y="' + (zonaY + 18) + '" text-anchor="middle" font-size="11.5" fill="#7a857e">' + esc(it.etiqueta) + '</text>';
+    if(it.sub) s += '<text x="' + (x + anchoBarra/2) + '" y="' + (zonaY + 34) + '" text-anchor="middle" font-size="11" fill="#a8b0aa">' + esc(it.sub) + '</text>';
+  });
+  s += '<line x1="10" y1="' + zonaY + '" x2="' + (ancho - 10) + '" y2="' + zonaY + '" stroke="#e3e0d8"/></svg>';
+  return '<div class="desliza">' + s + '</div>';
+}
+
+/* ================= render ================= */
+function render(){
+  const cont = document.getElementById('contenido');
+  const claves = Object.keys(datos.semanas).sort();
+  document.getElementById('pie').style.display = claves.length ? 'flex' : 'none';
+
+  if(!claves.length){
+    cont.innerHTML =
+      '<div id="zonaVacia">' +
+      '<h2>Empezá cargando el primer reporte</h2>' +
+      '<p>Arrastrá acá los CSV que llegan por Gmail los lunes — el <b>Reporte Ventas Semanal</b> y el de <b>Margen entre ventas y listas de precios</b> — o usá el botón verde de arriba.</p>' +
+      '<p>Podés arrastrar varios archivos juntos (incluso de semanas anteriores) y el tablero reconoce solo cuál es cuál.</p>' +
+      '<p style="margin-top:18px"><button class="btn-suave" onclick="document.getElementById(\'archivo\').click()">Elegir archivo…</button></p>' +
+      '</div>';
+    return;
+  }
+  if(sel !== 'all' && !datos.semanas[sel]) sel = claves.at(-1);
+
+  let h = '';
+
+  /* --- chips de semanas --- */
+  h += '<div id="semanas">';
+  for(const k of claves)
+    h += '<button class="chip' + (sel === k ? ' activa' : '') + '" onclick="sel=\'' + k + '\';render()">Semana ' + etiquetaSemana(k) + '</button>';
+  h += '<button class="chip' + (sel === 'all' ? ' activa' : '') + '" onclick="sel=\'all\';render()">Todas (' + claves.length + ')</button>';
+  h += '</div>';
+
+  const fs = filasSeleccion();
+  const totalM = suma(fs, 'm'), totalQ = suma(fs, 'q');
+  const devol = fs.filter(r => r.q < 0 || (r.q === 0 && r.m < 0));
+  const negM = suma(devol, 'm'), negQ = suma(devol, 'q');
+
+  /* --- KPIs --- */
+  let deltaHtml = '';
+  if(sel !== 'all'){
+    const i = claves.indexOf(sel);
+    if(i > 0){
+      const ant = suma(datos.semanas[claves[i-1]].filas, 'm');
+      if(ant > 0){
+        const d = (totalM - ant) / ant * 100;
+        deltaHtml = '<div class="sub"><span class="' + (d >= 0 ? 'delta-pos' : 'delta-neg') + '">' +
+                    (d >= 0 ? '▲ +' : '▼ ') + d.toFixed(1).replace('.', ',') + '%</span> vs. semana anterior</div>';
+      }
+    }
+  }
+  const mg = margenSeleccion();
+  let kpisMargen = '';
+  if(mg.length){
+    const tCosto = mg.reduce((t, [, x]) => t + x.costo, 0);
+    const tLista = mg.reduce((t, [, x]) => t + x.lista, 0);
+    const tVenta = mg.reduce((t, [, x]) => t + x.venta, 0);
+    const tMargen = tVenta - tCosto, dif = tVenta - tLista;
+    kpisMargen =
+      '<div class="kpi"><div class="et">Margen bruto</div><div class="valor">' + fmt$(tMargen) + '</div>' +
+      '<div class="sub">' + (tVenta ? pct1(tMargen / tVenta * 100) : '—') + ' sobre la venta · costo ' + fmt$(tCosto) + '</div></div>' +
+      '<div class="kpi' + (dif < 0 ? ' neg' : '') + '"><div class="et">Dif. s/ precio de lista</div><div class="valor">' + (dif > 0 ? '+' : '') + fmt$(dif) + '</div>' +
+      '<div class="sub">venta real vs. precio público de lista</div></div>';
+  }
+  h += '<div id="kpis">' +
+    '<div class="kpi"><div class="et">Venta neta</div><div class="valor">' + fmt$(totalM) + '</div>' + deltaHtml + '</div>' +
+    '<div class="kpi"><div class="et">Unidades netas</div><div class="valor">' + fmtN(totalQ) + '</div><div class="sub">' + fs.filter(r => r.q > 0).length + ' líneas de venta</div></div>' +
+    '<div class="kpi"><div class="et">Precio promedio</div><div class="valor">' + (totalQ ? fmt$(totalM / totalQ) : '—') + '</div><div class="sub">venta neta / unidades</div></div>' +
+    kpisMargen +
+    '<div class="kpi neg"><div class="et">Cambios y devoluciones</div><div class="valor">' + fmt$(Math.abs(negM)) + '</div><div class="sub">' + fmtN(Math.abs(negQ)) + ' unidades devueltas</div></div>' +
+    '</div>';
+
+  /* --- ventas diarias --- */
+  const porDia = [...agrupar(fs, r => r.d).entries()].sort((a, b) => a[0] < b[0] ? -1 : 1);
+  h += '<section class="panel"><h3>Ventas diarias</h3>' +
+       '<div class="nota">' + (sel === 'all' ? 'Todos los días cargados' : 'Semana del ' + etiquetaSemana(sel)) + ' · pasá el mouse por las barras para ver el detalle</div>' +
+       graficoBarras(porDia.map(([d, g]) => ({ etiqueta: etiquetaDia(d), valor: g.m, sub: fmtN(g.q) + ' u.' })),
+                     { formato: v => fmt$(v).replace('$ ', '$'), anchoBarra: sel === 'all' && porDia.length > 14 ? 42 : 64 }) +
+       '</section>';
+
+  /* --- margen bruto diario --- */
+  if(mg.length){
+    h += '<section class="panel"><h3>Margen bruto diario</h3>' +
+         '<div class="nota">Venta real menos costo de compra (lista franquicias, c/imp.) · el porcentaje es sobre la venta del día</div>' +
+         graficoBarras(mg.map(([d, x]) => ({ etiqueta: etiquetaDia(d), valor: x.venta - x.costo,
+                                             sub: x.venta ? pct1((x.venta - x.costo) / x.venta * 100) : '' })),
+                       { formato: v => fmt$(v).replace('$ ', '$'), anchoBarra: sel === 'all' && mg.length > 14 ? 42 : 64, color: '#4a7c59' }) +
+         '</section>';
+  }
+
+  /* --- comparativo semanal --- */
+  const hayMargen = Object.keys(datos.margenes).length > 0;
+  if(metrica === 'g' && !hayMargen) metrica = 'm';
+  h += '<section class="panel"><div class="fila-titulo"><div><h3>Comparativo semanal</h3>' +
+       '<div class="nota">Evolución semana a semana (se completa solo a medida que cargás reportes)</div></div>' +
+       '<div class="alternar">' +
+       '<button class="' + (metrica === 'm' ? 'activa' : '') + '" onclick="metrica=\'m\';render()">Monto</button>' +
+       '<button class="' + (metrica === 'q' ? 'activa' : '') + '" onclick="metrica=\'q\';render()">Unidades</button>' +
+       (hayMargen ? '<button class="' + (metrica === 'g' ? 'activa' : '') + '" onclick="metrica=\'g\';render()">Margen</button>' : '') +
+       '</div></div>';
+  if(claves.length === 1)
+    h += '<p style="color:var(--gris); font-size:13.5px">Por ahora hay una sola semana cargada. El lunes que viene, cargá el nuevo reporte y acá vas a ver la comparación.</p>';
+  h += graficoBarras(claves.map(k => {
+        const et = etiquetaSemana(k).slice(0, 5);
+        if(metrica === 'g'){
+          const ms = margenesEntre(...rangoSemana(k));
+          const v = ms.reduce((t, [, x]) => t + x.venta - x.costo, 0);
+          const vta = ms.reduce((t, [, x]) => t + x.venta, 0);
+          return { etiqueta: et, valor: v, sub: ms.length ? (vta ? pct1(v / vta * 100) : '') : 'sin datos' };
+        }
+        const g = datos.semanas[k].filas;
+        return { etiqueta: et, valor: metrica === 'm' ? suma(g,'m') : suma(g,'q'),
+                 sub: metrica === 'm' ? fmtN(suma(g,'q')) + ' u.' : fmt$(suma(g,'m')) };
+      }), { formato: metrica === 'q' ? fmtN : (v => fmt$(v).replace('$ ', '$')), color: metrica === 'g' ? '#4a7c59' : '#1e4d2b' }) +
+      '</section>';
+
+  /* --- por proveedor (drill-down) --- */
+  const provs = ordenarPorMonto(agrupar(fs.filter(r => r.q !== 0 || r.m !== 0), r => r.prov));
+  const maxProv = Math.max(...provs.map(([, g]) => g.m), 1);
+  h += '<section class="panel"><h3>Ventas por proveedor</h3>' +
+       '<div class="nota">Clic en un proveedor para ver sus artículos · clic en un artículo para ver colores y talles</div>' +
+       '<table><thead><tr><th>Proveedor</th><th style="width:26%"></th><th class="num">Unidades</th><th class="num">Monto</th><th class="num">% del total</th></tr></thead><tbody>';
+  provs.forEach(([prov, g], pi) => {
+    const id = 'p|' + pi + '|';
+    h += '<tr class="fprov" data-id="' + id + '"><td><span class="flecha">▸</span>' + esc(prov.replace(/^\d+\s*/, '')) + '</td>' +
+         '<td><span class="barra" style="width:100%"><i style="width:' + Math.max(g.m / maxProv * 100, 0).toFixed(1) + '%"></i></span></td>' +
+         '<td class="num">' + fmtN(g.q) + '</td><td class="num">' + fmt$(g.m) + '</td>' +
+         '<td class="num">' + (totalM ? (g.m / totalM * 100).toFixed(1).replace('.', ',') : '0') + '%</td></tr>';
+    ordenarPorMonto(agrupar(g.filas, r => r.art)).forEach(([art, ga], ai) => {
+      const idA = id + 'a|' + ai + '|';
+      h += '<tr class="fart oculta" data-id="' + idA + '" data-padre="' + id + '"><td><span class="flecha">▸</span>' + esc(nombreArt(art)) +
+           ' <span style="color:#a8b0aa">' + esc(codigoArt(art)) + '</span></td><td></td>' +
+           '<td class="num' + (ga.q < 0 ? ' neg' : '') + '">' + fmtN(ga.q) + '</td><td class="num' + (ga.m < 0 ? ' neg' : '') + '">' + fmt$(ga.m) + '</td><td></td></tr>';
+      ordenarPorMonto(agrupar(ga.filas, r => r.color + ' · talle ' + r.talle)).forEach(([ct, gd]) => {
+        h += '<tr class="fdet oculta" data-padre="' + idA + '"><td>' + esc(ct.replace(/^[A-Z]\d\s/, '')) + '</td><td></td>' +
+             '<td class="num' + (gd.q < 0 ? ' neg' : '') + '">' + fmtN(gd.q) + '</td><td class="num' + (gd.m < 0 ? ' neg' : '') + '">' + fmt$(gd.m) + '</td><td></td></tr>';
+      });
+    });
+  });
+  h += '</tbody></table></section>';
+
+  /* --- artículos: top + buscador --- */
+  const arts = ordenarPorMonto(agrupar(fs, r => r.art));
+  const normalizar = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim();
+  const filtrados = busqueda.trim()
+    ? arts.filter(([a]) => normalizar(a).includes(normalizar(busqueda)))
+    : arts.slice(0, 10);
+  h += '<section class="panel"><div class="fila-titulo"><div><h3>' + (busqueda.trim() ? 'Artículos encontrados (' + filtrados.length + ')' : 'Top 10 artículos') + '</h3>' +
+       '<div class="nota">Clic en un artículo para abrir el detalle por color, talle y fecha</div></div>' +
+       '<input type="search" id="buscar" placeholder="Buscar artículo… (ej: pantalón, bota)" value="' + esc(busqueda) + '"></div>' +
+       '<table><thead><tr><th>Artículo</th><th class="num">Unidades</th><th class="num">Monto</th></tr></thead><tbody>';
+  filtrados.forEach(([art, g], i) => {
+    const id = 't|' + i + '|';
+    h += '<tr class="fart" style="padding-left:0" data-id="' + id + '"><td style="padding-left:10px"><span class="flecha">▸</span><b>' + esc(nombreArt(art)) + '</b>' +
+         ' <span style="color:#a8b0aa">' + esc(codigoArt(art)) + '</span></td>' +
+         '<td class="num' + (g.q < 0 ? ' neg' : '') + '">' + fmtN(g.q) + '</td><td class="num' + (g.m < 0 ? ' neg' : '') + '">' + fmt$(g.m) + '</td></tr>';
+    g.filas.slice().sort((a, b) => a.d < b.d ? -1 : 1).forEach(r => {
+      h += '<tr class="fdet oculta" data-padre="' + id + '"><td>' + etiquetaDia(r.d) + ' · ' + esc(r.color.replace(/^[A-Z]\d\s/, '')) + ' · talle ' + esc(r.talle) + '</td>' +
+           '<td class="num' + (r.q < 0 ? ' neg' : '') + '">' + fmtN(r.q) + '</td><td class="num' + (r.m < 0 ? ' neg' : '') + '">' + fmt$(r.m) + '</td></tr>';
+    });
+  });
+  if(!filtrados.length) h += '<tr><td colspan="3" style="color:var(--gris)">Sin resultados para esa búsqueda.</td></tr>';
+  h += '</tbody></table></section>';
+
+  /* --- por categoría --- */
+  const cats = ordenarPorMonto(agrupar(fs, r => categoriaDe(r.art)));
+  const maxCat = Math.max(...cats.map(([, g]) => g.m), 1);
+  h += '<section class="panel"><h3>Ventas por categoría</h3>' +
+       '<div class="nota">Agrupado por tipo de prenda (primera palabra del artículo)</div>' +
+       '<table><thead><tr><th>Categoría</th><th style="width:30%"></th><th class="num">Unidades</th><th class="num">Monto</th><th class="num">% del total</th></tr></thead><tbody>';
+  for(const [cat, g] of cats){
+    h += '<tr><td style="font-weight:600">' + esc(cat) + '</td>' +
+         '<td><span class="barra" style="width:100%"><i style="width:' + Math.max(g.m / maxCat * 100, 0).toFixed(1) + '%"></i></span></td>' +
+         '<td class="num">' + fmtN(g.q) + '</td><td class="num">' + fmt$(g.m) + '</td>' +
+         '<td class="num">' + (totalM ? (g.m / totalM * 100).toFixed(1).replace('.', ',') : '0') + '%</td></tr>';
+  }
+  h += '</tbody></table></section>';
+
+  /* --- cambios y devoluciones --- */
+  if(devol.length){
+    h += '<section class="panel"><h3 style="color:var(--rojo)">Cambios y devoluciones</h3>' +
+         '<div class="nota">Líneas con cantidad negativa del período seleccionado</div>' +
+         '<table><thead><tr><th>Fecha</th><th>Artículo</th><th>Color / Talle</th><th class="num">Unidades</th><th class="num">Monto</th></tr></thead><tbody>';
+    for(const r of devol.slice().sort((a, b) => a.d < b.d ? -1 : 1)){
+      h += '<tr><td>' + etiquetaDia(r.d) + '</td><td>' + esc(nombreArt(r.art)) + '</td>' +
+           '<td>' + esc(r.color.replace(/^[A-Z]\d\s/, '')) + ' · ' + esc(r.talle) + '</td>' +
+           '<td class="num neg">' + fmtN(r.q) + '</td><td class="num neg">' + fmt$(r.m) + '</td></tr>';
+    }
+    h += '</tbody></table></section>';
+  }
+
+  cont.innerHTML = h;
+
+  /* expandir / contraer filas */
+  cont.querySelectorAll('tr[data-id]').forEach(tr => {
+    tr.addEventListener('click', () => {
+      const id = tr.dataset.id, abrir = !tr.classList.contains('abierta');
+      tr.classList.toggle('abierta', abrir);
+      cont.querySelectorAll('tr[data-padre]').forEach(f => {
+        if(abrir ? f.dataset.padre === id : f.dataset.padre.startsWith(id)){
+          f.classList.toggle('oculta', !abrir);
+          if(!abrir) f.classList.remove('abierta');
+        }
+      });
+    });
+  });
+
+  /* buscador (mantiene el foco entre renders) */
+  const inp = document.getElementById('buscar');
+  inp.addEventListener('input', () => {
+    busqueda = inp.value;
+    const pos = inp.selectionStart;
+    render();
+    const nuevo = document.getElementById('buscar');
+    nuevo.focus(); nuevo.setSelectionRange(pos, pos);
+  });
+}
+
+cargar();
+const _claves = Object.keys(datos.semanas).sort();
+if(_claves.length) sel = _claves.at(-1);
+render();
+cargarDesdeNube();
+</script>
+</body>
+</html>
