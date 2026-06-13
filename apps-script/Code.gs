@@ -32,7 +32,7 @@ var PROPS = PropertiesService.getScriptProperties();
 // margen del día. Mira los últimos 2 días por si alguna noche el disparador
 // no llegó a correr.
 function cargarReportesDiario() {
-  procesarMails('has:attachment filename:csv newer_than:2d', {});
+  procesarMails('from:znube@zoologic.com.ar newer_than:2d', {});
 }
 
 // Alias por compatibilidad: si el disparador quedó apuntando a este nombre
@@ -44,13 +44,13 @@ function cargarVentasDiario() {
 // Ejecutar UNA VEZ a mano para cargar todo el historial que haya en la casilla
 // (incluye el reporte de margen si está presente).
 function cargarHistorico() {
-  procesarMails('has:attachment filename:csv after:2025/01/01', {});
+  procesarMails('from:znube@zoologic.com.ar after:2025/01/01', {});
 }
 
 // Versión semanal anterior (ventas + margen). Queda por compatibilidad; no se
 // usa si el disparador apunta a cargarVentasDiario.
 function extraerReportesSemanales() {
-  procesarMails('has:attachment filename:csv newer_than:10d', {});
+  procesarMails('from:znube@zoologic.com.ar newer_than:10d', {});
 }
 
 function procesarMails(consulta, opc) {
