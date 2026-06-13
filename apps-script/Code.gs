@@ -1,10 +1,11 @@
 /**
- * PAMPERO ORÁN — Carga diaria del reporte de ventas
+ * PAMPERO ORÁN — Carga diaria de reportes (ventas + margen)
  * --------------------------------------------------------
  * Corre en la cuenta pampero.oran@gmail.com (script.google.com).
- * Todas las noches (después del mail de las 22:30) busca el CSV de ventas
- * del día, lo cifra con la clave del tablero y lo sube al repositorio de
- * GitHub. El tablero (GitHub Pages) lo descifra en el navegador.
+ * Todas las noches (después de los mails de las 22:30) busca los CSV de
+ * ventas y de margen del día, los cifra con la clave del tablero y los sube
+ * al repositorio de GitHub. El tablero (GitHub Pages) los descifra en el
+ * navegador.
  *
  * Cada archivo se guarda nombrado por la FECHA de los datos
  * (p. ej. data/ventas_2026-06-15.enc), no por el nombre del adjunto: así
@@ -20,17 +21,24 @@
  * REQUIERE además un archivo de script llamado "crypto-js.gs" con el
  * contenido de crypto-js.min.js (está en la carpeta apps-script del repo).
  *
- * Disparador: cargarVentasDiario → Basado en tiempo → Temporizador diario →
- * 23:00 a 00:00 (corre después del mail de las 22:30; zona horaria del
+ * Disparador: cargarReportesDiario → Basado en tiempo → Temporizador diario →
+ * 23:00 a 00:00 (corre después de los mails de las 22:30; zona horaria del
  * proyecto: Buenos Aires).
  */
 
 var PROPS = PropertiesService.getScriptProperties();
 
-// Función diaria (la que va en el disparador): toma SOLO el CSV de ventas.
-// Mira los últimos 2 días por si alguna noche el disparador no llegó a correr.
+// Función diaria (la que va en el disparador): toma el CSV de ventas y el de
+// margen del día. Mira los últimos 2 días por si alguna noche el disparador
+// no llegó a correr.
+function cargarReportesDiario() {
+  procesarMails('has:attachment filename:csv newer_than:2d', {});
+}
+
+// Alias por compatibilidad: si el disparador quedó apuntando a este nombre
+// (versión anterior), sigue funcionando y ahora también sube el margen.
 function cargarVentasDiario() {
-  procesarMails('has:attachment filename:csv newer_than:2d', { soloVentas: true });
+  cargarReportesDiario();
 }
 
 // Ejecutar UNA VEZ a mano para cargar todo el historial que haya en la casilla
@@ -93,7 +101,7 @@ function primeraFecha(texto) {
 
 // Ejecutar esta a mano la primera vez: autoriza los permisos y prueba todo el circuito
 function probarAhora() {
-  cargarVentasDiario();
+  cargarReportesDiario();
 }
 
 /* ---------------- GitHub API ---------------- */
