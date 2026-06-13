@@ -4,7 +4,7 @@
 
 - **El tablero**: https://blaragros-ai.github.io/Pampero-Dashboard/ — las gerentes lo abren desde cualquier computadora, ingresan la clave de acceso una sola vez por máquina y ven las ventas y márgenes siempre actualizados.
 - **Los datos**: viven en la carpeta `data/` de este repositorio, **cifrados** con la clave. Aunque el repositorio es público, sin la clave los datos son ilegibles.
-- **La automatización**: un Google Apps Script en la cuenta `pampero.oran@gmail.com` corre todos los **lunes a las 15:00** (hora argentina), busca los mails con los dos reportes CSV, los cifra y los sube acá. Nadie tiene que tocar nada.
+- **La automatización**: un Google Apps Script en la cuenta `pampero.oran@gmail.com` corre **todas las noches** (después del mail de ventas de las 22:30, hora argentina), toma el CSV de ventas del día, lo cifra y lo sube acá. Nadie tiene que tocar nada.
 
 ## Para las gerentes (uso diario)
 
@@ -28,12 +28,14 @@
      | `CLAVE_CIFRADO` | la clave de acceso del tablero |
 6. Volver al editor, elegir la función **`probarAhora`** en el desplegable y apretar **Ejecutar**. Google va a pedir autorización para acceder al Gmail y a servicios externos: aceptar (avisa que la app "no está verificada" porque es un script propio: Configuración avanzada → Ir al proyecto). En el "Registro de ejecución" tiene que decir qué archivos subió.
 7. **Para cargar el historial completo de 2026**: elegir la función **`cargarHistorico`** en el desplegable y ejecutarla una vez. Busca en toda la casilla los mails con reportes desde enero 2026 y los sube todos (puede tardar unos minutos). Solo hace falta hacerlo una vez; las semanas que ya estén subidas se reemplazan sin duplicarse.
-8. Ir a **Activadores** (relojito) → "Añadir activador":
-   - Función: `extraerReportesSemanales`
-   - Origen: "Basado en tiempo" → "Temporizador semanal" → **Lunes** → **15:00 a 16:00**
+8. Ir a **Activadores** (relojito). Si ya había un activador de la versión anterior (semanal, lunes), **eliminarlo** con los tres puntitos. Después "Añadir activador":
+   - Función: `cargarVentasDiario`
+   - Origen: "Basado en tiempo" → "Temporizador diario" → **23:00 a 00:00** (es la franja que corre *después* del mail de las 22:30).
    - Guardar.
 
-Desde ese momento, cada lunes a la tarde los reportes nuevos aparecen solos en el tablero.
+Desde ese momento, cada noche el CSV de ventas del día aparece solo en el tablero, y la semana en curso se va completando día a día.
+
+> Nota: el script ahora toma **solo el reporte de ventas**. El de margen (precios público/franquicia) ya no se actualiza automáticamente; el historial cargado sigue visible. Si querés volver a sumar el margen, avisá y se reactiva.
 
 ## El token de GitHub (importante)
 
