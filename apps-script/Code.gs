@@ -66,7 +66,7 @@ function procesarMails(consulta, opc) {
       msg.getAttachments().forEach(function (adj) {
         if (!/\.csv$/i.test(adj.getName())) return;
 
-        var texto = adj.getDataAsString('UTF-8');
+        var texto = leerTexto(adj);
         var esMargen = texto.indexOf('Margen Vtas') !== -1;
         if (esMargen && opc.soloVentas) return;          // modo diario: solo ventas
 
@@ -88,8 +88,23 @@ function procesarMails(consulta, opc) {
     actualizarIndice(subidos);
     Logger.log('Listo: ' + subidos.length + ' archivo(s) subido(s) y agregado(s) al índice.');
   } else {
-    Logger.log('No se encontraron reportes CSV con la búsqueda: ' + consulta);
+    Logger.log('No se subió nada. Mails encontrados con "' + consulta + '": ' + hilos.length +
+               '. (Si hay mails pero no se subió nada, el adjunto no es un CSV de reporte con fechas.)');
   }
+}
+
+// Lee el adjunto probando varias codificaciones y se queda con la primera que
+// permita encontrar la fecha. Algunos cubos pueden llegar en UTF-16 o Latin-1
+// en vez de UTF-8; así el script los lee igual.
+function leerTexto(adj) {
+  var charsets = ['UTF-8', 'ISO-8859-1', 'UTF-16'];
+  for (var i = 0; i < charsets.length; i++) {
+    try {
+      var t = adj.getDataAsString(charsets[i]);
+      if (primeraFecha(t)) return t;
+    } catch (e) {}
+  }
+  return adj.getDataAsString('UTF-8');
 }
 
 // Primer dd/mm/aaaa que aparece en el CSV → 'aaaa-mm-dd' (el encabezado no
