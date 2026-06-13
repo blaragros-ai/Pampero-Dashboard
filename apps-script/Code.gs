@@ -1,10 +1,16 @@
 /**
- * PAMPERO ORÁN — Extracción semanal de reportes de ventas
+ * PAMPERO ORÁN — Carga diaria del reporte de ventas
  * --------------------------------------------------------
  * Corre en la cuenta pampero.oran@gmail.com (script.google.com).
- * Cada lunes a las 15:00 busca los mails con los reportes CSV de la
- * semana, los cifra con la clave del tablero y los sube al repositorio
- * de GitHub. El tablero (GitHub Pages) los descifra en el navegador.
+ * Todas las noches (después del mail de las 22:30) busca el CSV de ventas
+ * del día, lo cifra con la clave del tablero y lo sube al repositorio de
+ * GitHub. El tablero (GitHub Pages) lo descifra en el navegador.
+ *
+ * Cada archivo se guarda nombrado por la FECHA de los datos
+ * (p. ej. data/ventas_2026-06-15.enc), no por el nombre del adjunto: así
+ * cada día es un archivo propio, nunca se pisa el historial y si un día se
+ * reenvía corregido se reemplaza solo ese día. El tablero fusiona por día,
+ * de modo que la semana en curso se va completando sola.
  *
  * REQUIERE (Configuración del proyecto → Propiedades del script):
  *   GITHUB_TOKEN   token de GitHub con permiso de Contents (lectura/escritura) sobre el repo
@@ -14,24 +20,33 @@
  * REQUIERE además un archivo de script llamado "crypto-js.gs" con el
  * contenido de crypto-js.min.js (está en la carpeta apps-script del repo).
  *
- * Disparador: extraerReportesSemanales → Basado en tiempo → Temporizador
- * semanal → Lunes → 15:00 a 16:00 (zona horaria del proyecto: Buenos Aires).
+ * Disparador: cargarVentasDiario → Basado en tiempo → Temporizador diario →
+ * 23:00 a 00:00 (corre después del mail de las 22:30; zona horaria del
+ * proyecto: Buenos Aires).
  */
 
 var PROPS = PropertiesService.getScriptProperties();
 
-// Función principal (la que va en el disparador semanal)
-function extraerReportesSemanales() {
-  procesarMails('has:attachment filename:csv newer_than:10d');
+// Función diaria (la que va en el disparador): toma SOLO el CSV de ventas.
+// Mira los últimos 2 días por si alguna noche el disparador no llegó a correr.
+function cargarVentasDiario() {
+  procesarMails('has:attachment filename:csv newer_than:2d', { soloVentas: true });
 }
 
-// Ejecutar UNA VEZ a mano para cargar todos los reportes históricos de 2026
-// que estén en la casilla (puede tardar unos minutos si hay muchas semanas).
+// Ejecutar UNA VEZ a mano para cargar todo el historial que haya en la casilla
+// (incluye el reporte de margen si está presente).
 function cargarHistorico() {
-  procesarMails('has:attachment filename:csv after:2026/01/01');
+  procesarMails('has:attachment filename:csv after:2025/01/01', {});
 }
 
-function procesarMails(consulta) {
+// Versión semanal anterior (ventas + margen). Queda por compatibilidad; no se
+// usa si el disparador apunta a cargarVentasDiario.
+function extraerReportesSemanales() {
+  procesarMails('has:attachment filename:csv newer_than:10d', {});
+}
+
+function procesarMails(consulta, opc) {
+  opc = opc || {};
   var clave = PROPS.getProperty('CLAVE_CIFRADO');
   if (!clave) throw new Error('Falta la propiedad CLAVE_CIFRADO');
 
@@ -41,18 +56,20 @@ function procesarMails(consulta) {
   hilos.forEach(function (hilo) {
     hilo.getMessages().forEach(function (msg) {
       msg.getAttachments().forEach(function (adj) {
-        var nombre = adj.getName();
-        if (!/\.csv$/i.test(nombre)) return;
-        // Solo los dos reportes que alimentan el tablero
-        var esReporte = /Reporte Ventas Semanal/i.test(nombre) || /Margen entre ventas/i.test(nombre);
-        if (!esReporte) return;
+        if (!/\.csv$/i.test(adj.getName())) return;
 
         var texto = adj.getDataAsString('UTF-8');
-        var archivo = nombre.replace(/\.csv$/i, '').replace(/[^\w\-]+/g, '_') + '.enc';
-        if (subidos.indexOf(archivo) !== -1) return;   // adjunto repetido en el hilo
+        var esMargen = texto.indexOf('Margen Vtas') !== -1;
+        if (esMargen && opc.soloVentas) return;          // modo diario: solo ventas
+
+        var fecha = primeraFecha(texto);                 // 'aaaa-mm-dd' del primer día del CSV
+        if (!fecha) return;                              // no es un reporte con fechas
+
+        var archivo = (esMargen ? 'margen_' : 'ventas_') + fecha + '.enc';
+        if (subidos.indexOf(archivo) !== -1) return;     // ya subido en esta corrida
 
         var cifrado = CryptoJS.AES.encrypt(texto, clave).toString();
-        subirArchivo('data/' + archivo, cifrado, 'Reporte semanal: ' + nombre);
+        subirArchivo('data/' + archivo, cifrado, 'Reporte ' + (esMargen ? 'margen' : 'ventas') + ' ' + fecha);
         subidos.push(archivo);
         Logger.log('Subido: ' + archivo);
       });
@@ -67,9 +84,16 @@ function procesarMails(consulta) {
   }
 }
 
+// Primer dd/mm/aaaa que aparece en el CSV → 'aaaa-mm-dd' (el encabezado no
+// tiene fechas, así que la primera coincidencia es la del primer día de datos).
+function primeraFecha(texto) {
+  var m = texto.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? (m[3] + '-' + m[2] + '-' + m[1]) : null;
+}
+
 // Ejecutar esta a mano la primera vez: autoriza los permisos y prueba todo el circuito
 function probarAhora() {
-  extraerReportesSemanales();
+  cargarVentasDiario();
 }
 
 /* ---------------- GitHub API ---------------- */
