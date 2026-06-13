@@ -52,8 +52,11 @@ Para el paso 5 conviene crear un token **limitado solo a este repositorio**:
 
 La clave cifra los archivos, así que cambiarla implica re-cifrar todo el historial con la clave nueva, actualizar `CLAVE_CIFRADO` en el Apps Script y avisarles a las gerentes. Es un proceso asistido: pedírselo a Claude.
 
-## Si un lunes no aparecen los datos
+## Si algún día no aparecen los datos
 
-1. ¿Llegaron los dos mails con los CSV? Si llegaron tarde, ejecutar `probarAhora` a mano en script.google.com, o esperar al lunes siguiente (el script busca mails de los últimos 10 días).
-2. Revisar en script.google.com → "Ejecuciones" si el script falló y con qué error (token vencido es la causa más probable).
-3. Siempre se puede cargar el CSV a mano: arrastrarlo adentro del tablero (se ve solo en esa computadora, hasta que el script lo suba al repositorio).
+Los reportes (cubos de zNube) llegan de **`znube@zoologic.com.ar`**; el script los busca por ese remitente. Si cambia la dirección que los envía, hay que actualizar la búsqueda en `cargarReportesDiario` (`from:...`).
+
+1. ¿Llegaron los mails con los CSV de ese remitente? Para comprobarlo, pegá en la barra de búsqueda de Gmail: `from:znube@zoologic.com.ar newer_than:2d`. Si aparecen, el script los va a encontrar; si no, todavía no llegaron.
+2. Si llegaron tarde, ejecutar `probarAhora` a mano en script.google.com.
+3. Revisar en script.google.com → "Ejecuciones" si el script falló y con qué error (token vencido es la causa más probable).
+4. Siempre se puede cargar el CSV a mano: arrastrarlo adentro del tablero (se ve solo en esa computadora, hasta que el script lo suba al repositorio).
