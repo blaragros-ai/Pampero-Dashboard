@@ -57,6 +57,7 @@ function procesarMails(consulta, opc) {
   opc = opc || {};
   var clave = PROPS.getProperty('CLAVE_CIFRADO');
   if (!clave) throw new Error('Falta la propiedad CLAVE_CIFRADO');
+  asegurarRandom();
 
   var hilos = GmailApp.search(consulta);
   var subidos = [];
@@ -91,6 +92,21 @@ function procesarMails(consulta, opc) {
     Logger.log('No se subió nada. Mails encontrados con "' + consulta + '": ' + hilos.length +
                '. (Si hay mails pero no se subió nada, el adjunto no es un CSV de reporte con fechas.)');
   }
+}
+
+// Google Apps Script no expone el módulo de criptografía nativo que CryptoJS 4
+// usa para generar la "sal" del cifrado (de ahí el error "Native crypto module
+// could not be used"). La reemplazamos por Math.random: la sal viaja en claro
+// dentro del archivo cifrado, no necesita ser criptográficamente segura; la
+// seguridad la da la clave.
+function asegurarRandom() {
+  CryptoJS.lib.WordArray.random = function (nBytes) {
+    var words = [];
+    for (var i = 0; i < nBytes; i += 4) {
+      words.push((Math.random() * 0x100000000) | 0);
+    }
+    return CryptoJS.lib.WordArray.create(words, nBytes);
+  };
 }
 
 // Lee el adjunto probando varias codificaciones y se queda con la primera que
